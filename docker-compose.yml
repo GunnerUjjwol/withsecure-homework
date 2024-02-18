@@ -1,0 +1,29 @@
+version: "3.9"
+services:
+  sensor-fleet:
+    container_name: sensor-fleet
+    build: sensor-fleet
+    environment: 
+      AWS_ACCESS_KEY_ID: some_key_id
+      AWS_SECRET_ACCESS_KEY: some_secret
+
+  localstack:
+    container_name: "localstack"
+    build: localstack
+    ports:
+      - "4510-4559:4510-4559"  # external service port range
+      - "4566:4566"            # LocalStack Edge Proxy
+    environment:
+      - DEBUG=${DEBUG-}
+      - DATA_DIR=${DATA_DIR-}
+      - LAMBDA_EXECUTOR=${LAMBDA_EXECUTOR-}
+      - HOST_TMP_FOLDER=${TMPDIR:-/tmp/}localstack
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - EDGE_BIND_HOST=0.0.0.0
+      - HOSTNAME_EXTERNAL=localstack
+      - AWS_DEFAULT_REGION=eu-west-1
+      - AWS_ACCESS_KEY_ID=some_key_id
+      - AWS_SECRET_ACCESS_KEY=some_secret
+    volumes:
+      - "${TMPDIR:-/tmp}/localstack:/tmp/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
