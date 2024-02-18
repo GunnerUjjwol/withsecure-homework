@@ -7,6 +7,13 @@ services:
       AWS_ACCESS_KEY_ID: some_key_id
       AWS_SECRET_ACCESS_KEY: some_secret
 
+  preprocessor-service:
+    container_name: preprocessor-service
+    build: preprocessor-service
+    environment: 
+      AWS_ACCESS_KEY_ID: some_key_id
+      AWS_SECRET_ACCESS_KEY: some_secret
+
   localstack:
     container_name: "localstack"
     build: localstack
