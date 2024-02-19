@@ -20,7 +20,7 @@ There were 2 pre-baked resources in the Localstack environment:
 
 ## Solution
 
-A new service name preprocessor-service is responsible for receiving the submissions from the queue, spread it out into individual events, and publishing the events into the Kinesis datasream. The service is bundled into a new docker image service to preserve the loosely coupled microservice architecture of the environment.
+A new service named preprocessor-service is created which acts as the message broker receiving the message from queue and publishing it to kinesis data stream after processing the data. In gist, the service is responsible for receiving the submissions from the queue, validate the data, spread it out into individual events, and publishing the events into the Kinesis datasream. The service is bundled into a new docker image service to preserve the loosely coupled microservice architecture of the environment.
 The solution is implemented in python consistent with the existing services.
 The main.py continuosly runs until terminated. The solution is modularized into several modules/functions. The flow proceeds with following modules in the specified order.
 
@@ -62,7 +62,7 @@ The preprocessor-service alone can be launched with `docker-compose up -d prepro
 
 To validate that the preprocessor-service have been started up properly, run the following commands to ensure event data are published to the kinesis datastream, expect similar responses as in the examples below:
 
-Describe the stream. Obtain the shardId to be used in next command.
+1. Describe the stream. Note the shardId to be used in next command.
 
 ```console
 $ docker-compose exec localstack aws --endpoint-url=http://localhost:4566 kinesis describe-stream --stream-name events
@@ -106,7 +106,7 @@ $ docker-compose exec localstack aws --endpoint-url=http://localhost:4566 kinesi
 }
 ```
 
-Get shard iterator for a shard. An iterator is required to get records from the shard
+2. Get shard iterator for a shard. An iterator is required to get records from the shard
 
 ```console
 $ docker-compose exec localstack aws --endpoint-url=http://localhost:4566 kinesis get-shard-iterator --stream-name events --shard-id shardId-000000000001 --shard-iterator-type TRIM_HORIZON
@@ -115,7 +115,7 @@ $ docker-compose exec localstack aws --endpoint-url=http://localhost:4566 kinesi
 }
 ```
 
-Check records published to one of the shard
+3. Check records published to one of the shard
 
 ```console
 $ docker-compose exec localstack aws --endpoint-url=http://localhost:4566 kinesis get-records --shard-iterator AAAAAAAAAAFF7+jVVP6kv9wb+7Y7fHCf4m5QY1LkXPiXIJLyW0UkJ+V2l0R5LPYNgBmElk/XlxabvpcmpTG0tzP7ATAssmmS5Px0R920Q5UFMgNo/GBYthqEi8XQp44ja59+7amD1/K5xbzIGHs6tduVZGhItSb49HQfP4QzsTmGviGhg2rP+jEKW5fnLpP4OvagKcePXqU= --limit 3
@@ -149,9 +149,13 @@ $ docker-compose exec localstack aws --endpoint-url=http://localhost:4566 kinesi
 }
 ```
 
-The records from next shard can be similarly checked with the shardIterator for another shard.
+4. The records from next shard can be similarly checked with the shardIterator for another shard.
 
-### Requirements Fulfillment notes
+```console
+docker-compose exec localstack aws --endpoint-url=http://localhost:4566 kinesis get-records --shard-iterator <shardIterator>
+```
+
+### Explanations towards requirements Fulfillment
 
 - each event is published as an individual record to kinesis (one submission is turned into multiple events)
   - Fulfillment note - the preprocess_submission(submission) function parses the submission json into individual event. Each event is individually passed on to the kinesis stream.
@@ -161,10 +165,10 @@ The records from next shard can be similarly checked with the shardIterator for 
   - Fulfillment note - An UUID is created by leveraging the uuid library.
 - each event must have an identifier of the source device (`device_id`)
 - each event must have a timestamp when it was processed (backend side time in UTC)
-- submissions are validated and invalid or broken submissions are dropped #TODO
+- submissions are validated and invalid or broken submissions are dropped
   - Fulfillment note - validate_submission(submission_data) looks after the validation of the submission.
-- must guarantee no data loss (for valid data), i.e. submissions must not be deleted before all events are succesfully published #TODO
-- must guarantee ordering of events in the context of a single submission #TODO
+- must guarantee no data loss (for valid data), i.e. submissions must not be deleted before all events are succesfully published
+- must guarantee ordering of events in the context of a single submission
   - Fulfillment note - To ensure ordering of events in the context of a single submission, "submission_id" is used as the PartitionKey while putting events to the Kinesis Stream. This will ensure that all the events belonging to the same submission are sent to the same shard in the Kinesis stream, preserving their order of arrival.
 - the number of messages read from SQS with a single request must be configurable
 - the visibility timeout of read SQS messages must be configurable
