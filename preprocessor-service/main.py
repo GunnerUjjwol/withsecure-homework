@@ -15,6 +15,8 @@ LOCALSTACK_ENDPOINT_URL = os.environ.get("LOCALSTACK_ENDPOINT_URL", "http://loca
 BATCH_SIZE = int(os.environ.get("BATCH_SIZE", 10))
 VISIBILITY_TIMEOUT = int(os.environ.get("VISIBILITY_TIMEOUT", 30))
 
+STREAM_NAME = "events"
+
 config = Config(
     region_name = 'eu-west-1',
     retries = {
@@ -27,10 +29,42 @@ config = Config(
 sqs_client = boto3.client('sqs', config=config, endpoint_url=LOCALSTACK_ENDPOINT_URL, verify=False)
 kinesis_client = boto3.client('kinesis', config=config, endpoint_url=LOCALSTACK_ENDPOINT_URL, verify=False)
 
+def receive_submissions(sqs_client, queue_url, batch_size, visibility_timeout):
+    """
+    Receive messages from SQS
+
+    Args:
+        sqs_client          : The handle for SQS client
+        queue_url           : The URL of the Queue
+        batch_size          : Configurable MaxNumberOfMessages polled from the queue at a time
+        visibility_timeout  : Configurable Visibility timeout to lock the message for other consumers.
+
+    Returns:
+        List of messages from queue
+    """
+    try:
+        response = sqs_client.receive_message(
+        QueueUrl=queue_url,
+        MaxNumberOfMessages=batch_size,
+        VisibilityTimeout=visibility_timeout
+        )
+        messages = response.get('Messages', [])
+        return messages
+    except (EndpointConnectionError, ClientError) as e:
+        #TODO: return or pass?
+        # print(f"Error receiving submissions: {e}")
+        # return []
+        pass
+
 def validate_submission(submission_data):
     """
     Validates the submission data.
-    Returns True if the submission is valid, False otherwise.
+    
+    Args:
+    submission_data: Decoded submission data
+    
+    Returns:
+    True if the submission is valid, False otherwise.
     """
     required_fields = ["submission_id", "device_id", "time_created", "events"]
     
@@ -72,6 +106,15 @@ def validate_submission(submission_data):
     return True
 
 def is_valid_uuid(uuid_str):
+    """
+    Validation function for uuid
+
+    Args:
+        uuid_str : uuid
+
+    Returns:
+        True if valid, False otherwise
+    """
     try:
         uuid_obj = uuid.UUID(uuid_str)
     except ValueError:
@@ -80,22 +123,24 @@ def is_valid_uuid(uuid_str):
 
 def preprocess_submission(submission):
     """
-    Preprocesses a submission and extracts individual events for publishing to Kinesis.
+    Preprocesses a submission and 
+    extracts individual events for publishing to Kinesis.
+    
+    Args:
+        submission : The message data from the queue to be prrocesses
+
+    Returns:
+        List of individual processed events
     """
     processed_events = []
     submission_id = submission.get("submission_id")
     device_id = submission.get("device_id")
 
-    #TODO: Add validations, for all fields
-    if not validate_submission(submission):
-        print(f"Dropped invalid submission data: {submission}")
-        return None
-
     events = submission.get("events", {})
     for event_type, event_list in events.items():
         for event in event_list:
             processed_event = {
-                "event_type": "new_process",
+                "event_type": "new_process | network_connection",
                 "event_id": str(uuid.uuid4()),
                 "submission_id": submission_id,
                 "device_id": device_id,
@@ -118,19 +163,27 @@ def preprocess_submission(submission):
     return processed_events
 
 
-    
-def receive_submissions(sqs_client, queue_url):
+def publish_to_kinesis(events, stream_name, partition_key):
+    """
+    Publish individual event to kinesis data stream 
+
+    Args:
+        events         : Events
+        stream_name       : Kinesis stream
+        partition_key : PartitionKey for kinesis shards distribution
+    """
     try:
-        response = sqs_client.receive_message(
-        QueueUrl=queue_url,
-        MaxNumberOfMessages=BATCH_SIZE,
-        VisibilityTimeout=VISIBILITY_TIMEOUT
-        )
-        messages = response.get('Messages', [])
-        return messages
+        for event in events:
+                kinesis_client.put_record(
+                    StreamName=stream_name,
+                    Data=json.dumps(event),
+                    PartitionKey=partition_key #TODO: use event.event_type as partition key?
+                )
+        
     except (EndpointConnectionError, ClientError) as e:
-        print(f"Error receiving submissions: {e}")
-        return []
+        pass
+        # return   
+
         
 
 def main():
@@ -145,9 +198,7 @@ def main():
             queue_url = sqs_client.get_queue_url(QueueName='submissions')['QueueUrl']
             # print(f"trying to connect to receive message from sqs : {queue_url}")
             print("Receive submission called")
-            messages = receive_submissions(sqs_client, queue_url)
-            
-            # print(f"Messages received: {messages}")
+            messages = receive_submissions(sqs_client, queue_url, BATCH_SIZE, VISIBILITY_TIMEOUT)
         
             for message in messages:
                 # Process each message
@@ -157,6 +208,11 @@ def main():
                 # Deserialize the message from JSON
                 message_data = json.loads(decoded_body)
                 receipt_handle = message['ReceiptHandle']
+                
+                #TODO: Add validations, for all fields
+                if not validate_submission(submission):
+                    print(f"Dropped invalid submission data: {submission}")
+                    return None
 
                 processed_events = preprocess_submission(message_data)
 
@@ -165,14 +221,15 @@ def main():
                 if processed_events:
                     # Publish processed events to Kinesis stream
                     for event in processed_events:
-                        print("------------------------------------------")
-                        print(f"{datetime.utcnow().isoformat()}")
-                        print(f"Pushing Event to Kinesis: {event}")
-                        kinesis_client.put_record(
-                            StreamName='events',
-                            Data=json.dumps(event),
-                            PartitionKey=event['event_type'] #TODO: use event.event_type as partition key?
-                        )
+                        publish_to_kinesis(processed_events,STREAM_NAME, event['submission_id'])
+                        # print("------------------------------------------")
+                        # print(f"{datetime.utcnow().isoformat()}")
+                        # print(f"Pushing Event to Kinesis: {event}")
+                        # kinesis_client.put_record(
+                        #     StreamName='events',
+                        #     Data=json.dumps(event),
+                        #     PartitionKey=event['submission_id'] #TODO: use event.event_type as partition key?
+                        # )
 
                 # Delete the message from SQS
                 
