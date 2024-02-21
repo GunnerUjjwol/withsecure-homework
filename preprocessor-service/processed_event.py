@@ -35,7 +35,9 @@ class ProcessedEvent:
             if not isinstance(self.event_data["cmdl"], str) or not isinstance(
                 self.event_data["user"], str
             ):
-                print(f"Detected invalid Cmdl or user. Dropping event :{self.event_data}")
+                print(
+                    f"Detected invalid Cmdl or user. Dropping event :{self.event_data}"
+                )
                 return False
         # Checks for event_type : network_connection
         elif self.event_type == self.NETWORK_CONNECTION_EVENT:
@@ -55,6 +57,8 @@ class ProcessedEvent:
                 )
                 return False
             if not isinstance(self.event_data["destination_port"], int):
-                print(f"Detected invalid destination_port. Dropping event :{self.event_data}")
+                print(
+                    f"Detected invalid destination_port. Dropping event :{self.event_data}"
+                )
                 return False
             return True
