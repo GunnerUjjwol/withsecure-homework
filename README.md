@@ -158,6 +158,7 @@ $ docker-compose exec localstack aws --endpoint-url=http://localhost:4566 kinesi
 ```
 
 Alternative Way
+
 A kinesis consumer simulator built with python sdk `kinesis_consumer.py` has been placed in the localstack container.
 Exec into the running container as `docker exec localstack bash`
 then run `python kinesis_consumer.py`
