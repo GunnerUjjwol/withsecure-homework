@@ -61,4 +61,4 @@ class ProcessedEvent:
                     f"Detected invalid destination_port. Dropping event :{self.event_data}"
                 )
                 return False
-            return True
+        return True
