@@ -205,7 +205,6 @@ def main():
     while True:
         try:
             queue_url = sqs_client.get_queue_url(QueueName="submissions")["QueueUrl"]
-            print("Receive submission called")
             # Receive messages from SQS
             messages = receive_submissions(
                 sqs_client, queue_url, BATCH_SIZE, VISIBILITY_TIMEOUT
@@ -232,25 +231,23 @@ def main():
                 if processed_events:
                     # validate each processed event
                     valid_events = [
-                        event for event in processed_events if event.validate_event()
+                        json.loads(event.toJson())
+                        for event in processed_events
+                        if event.validate_event()
                     ]
 
-                    valid_events_dict = [
-                        json.loads(event.toJson()) for event in valid_events
-                    ]
 
                     # Publish processed events to Kinesis stream
                     print("------------------------------------------")
                     print(
-                        f"{datetime.utcnow().isoformat()} Publishing Events to Kinesis: {valid_events_dict}"
+                        f"{datetime.utcnow().isoformat()} Publishing Events to Kinesis: {valid_events}"
                     )
                     # publish_to_kinesis(kinesis_client, processed_events)
-                    publish_to_kinesis(kinesis_client, valid_events_dict)
+                    publish_to_kinesis(kinesis_client, valid_events)
 
                 # Delete the message from SQS
                 delete_from_queue(sqs_client, queue_url, receipt_handle)
 
-                # TODO: Do something about this, remove??
                 time.sleep(random.randint(5, 15))
         except (EndpointConnectionError, ClientError) as e:
             pass
