@@ -31,7 +31,6 @@ def get_records(stream_name: str, shard_iterator: str):
 
     try:
         response = kinesis_client.get_records(ShardIterator=shard_iterator, Limit=5)
-        print(f"Response: {response}")
         records = response.get("Records", [])
         return records
     except (EndpointConnectionError, ClientError) as e:

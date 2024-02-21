@@ -193,6 +193,7 @@ def main():
     """
     Continuously processes submissions from SQS and publishes processed events to Kinesis.
     """
+    print("Starting preprocessor service")
 
     # initialize AWS Clients
     sqs_client = boto3.client(
@@ -235,7 +236,6 @@ def main():
                         for event in processed_events
                         if event.validate_event()
                     ]
-
 
                     # Publish processed events to Kinesis stream
                     print("------------------------------------------")
