@@ -154,7 +154,23 @@ $ docker-compose exec localstack aws --endpoint-url=http://localhost:4566 kinesi
 4. The records from next shard can be similarly checked with the shardIterator for another shard.
 
 ```console
-docker-compose exec localstack aws --endpoint-url=http://localhost:4566 kinesis get-records --shard-iterator <shardIterator>
+$ docker-compose exec localstack aws --endpoint-url=http://localhost:4566 kinesis get-records --shard-iterator <shardIterator>
+```
+
+Alternative Way
+A kinesis consumer simulator built with python sdk `kinesis_consumer.py` has been placed in the localstack container.
+Exec into the running container as `docker exec localstack bash`
+then run `python kinesis_consumer.py`
+
+```console
+$ docker exec localstack bash
+
+$ python kinesis_consumer.py
+Consumer Started
+--------------------
+Record Data : {"event_id": "3e6e2c72-3bd0-49aa-bb67-739f92afcb6b", "event_type": "network_connection", "submission_id": "8af031bb-f03c-4cb3-b245-dda2378e263e", "device_id": "e051049e-9ef5-4c5b-aa34-cf74b48925f5", "time_processed": "2024-02-21T13:40:10.073492", "event_data": {"source_ip": "192.168.0.1", "destination_ip": "23.13.252.39", "destination_port": 58404}}
+---------------------
+Record Data : {"event_id": "cbd227e2-00dc-437d-93aa-b10e87d4f46f", "event_type": "network_connection", "submission_id": "9dfaec9c-2375-4a5e-bc21-09efa232a876", "device_id": "0c6ad527-418f-4cfd-8d44-cd252cbc0c49", "time_processed": "2024-02-21T13:40:24.172857", "event_data": {"source_ip": "192.168.0.2", "destination_ip": "23.13.252.39", "destination_port": 39321}}
 ```
 
 ### Explanations towards requirements Fulfillment
@@ -176,6 +192,20 @@ docker-compose exec localstack aws --endpoint-url=http://localhost:4566 kinesis 
 - the visibility timeout of read SQS messages must be configurable
   - Fulfillment note - The MaxNumberOfMessages and the VisibilityTimeout configs for the SQS queue message retrieval are made configurable as environment variables in the Dockerfile with the fallback default values specified in the code. The value of those will be configurable during the docker image build time.
 
-### Deliverables
+### Design Questions
+
+- How does your application scale and guarantee near-realtime processing when the incoming traffic increases? Where are the possible bottlenecks and how to tackle those?
+  ANSWER -> There are multiple ways to enhance scalability to the application. The obvious way is to add the number of shards in kinesis data streams. However, it requires prior observation of flow of data and could be unreliable on fluctuating data stream. If near-realtime processing can be considered, Kinesis Firehose provides the alternative which is a fully managed service that allows you to reliably load streaming data into different services.
+  The main bottleneck is the preprocessor service. If the preprocessor service cannot process the data in the same rate as it is produced by SQS, and cannot publish to kinesis stream, the queue depth can increase a lot, resulting in throttling, high latency and possible dataloss when message exceeds the retention period.
+  To tackle this, it is needed to check the various metrics such as health of the preprocessing services and monitor the queue depth, and possibly scale the preprocessing service to increase consumption throughput. And in kinesis, we can reshard to higher shards.
+
+- What kind of metrics you would collect from the application to get visibility to its througput, performance and health?
+  ANSWER -> We can collect the metrics to observe the frequency of dropped/invalid messages. It will give us visibility into any unhealthy data source. Besides, the log, especially the error logs from preprocessor service gives insight into the types of error incurred in the service. Further, we can add health checks to check if the service is running. To observe the performance, the SQS queue depth and the CPU utilization of the preprocessor service could be useful.
+
+- How would you deploy your application in a real world scenario? What kind of testing, deployment stages or quality gates you would build to ensure a safe production deployment?
+  ANSWER -> First of all, in the real world scenario CICD pipeling needs to be built for deployment purposes to automate the delivery process. For build pipeline, following steps in the order should be present - Code Push, Build, Unit tests, Static code analysis, integration tests, automated tests, deployment verification. Various deployment environments like development, testing and production environments needs to be maintained. Build can only be pushed to production after all quality gates passes. Quality gates may include criteria related to test coverage, code quality, performance, security, and compliance.
+  On the other hand, in a real world scenario, the AWS service will be used instead of the test localstack simulator. Also, the AWS CloudFormation can be leveraged for templating as Infrastructure as a code solution to bring up the required services.
+
+### Deliverable Disclaimers
 
 - All used source code is freely distributable.
