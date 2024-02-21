@@ -51,7 +51,9 @@ The main.py continuosly runs until terminated. The solution is modularized into 
 
    - The individual event is puushed to the kinesis datastream "events". The submission_id is used as the partition key to distribute the events into the shards to ensure that events from each submission are orderly published to the same shard
 
-5. Eventually, once all events from the submission is processed, the submission is deleted from the SQS queue.
+5. Delete from queue - delete_from_queue(sqs_client,queue_url,receipt_handle)
+
+   - Eventually, once all events from the submission is processed, the submission is deleted from the SQS queue. Another case when a submission is deleted from the queue is when the submission is invalid, in that case any further preprocesing is not carried on, and the submission is dropped.
 
 ## How to launch the service
 
