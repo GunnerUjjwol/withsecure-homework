@@ -11,7 +11,7 @@ from datetime import datetime
 from processed_event import ProcessedEvent
 
 # Configuration
-AWS_ENDPOINT_URL = os.environ.get("AWS_ENDPOINT_URL", "http://localstack123:4566")
+AWS_ENDPOINT_URL = os.environ.get("AWS_ENDPOINT_URL", "http://localstack:4566")
 
 BATCH_SIZE = int(os.environ.get("BATCH_SIZE", 5))
 VISIBILITY_TIMEOUT = int(os.environ.get("VISIBILITY_TIMEOUT", 15))
@@ -155,7 +155,7 @@ def preprocess_submission(submission: dict):
     return processed_events
 
 
-def publish_to_kinesis(kinesis_client, events: list[ProcessedEvent]):
+def publish_to_kinesis(kinesis_client, events: dict):
     """
     Publish individual event to kinesis data stream
 
