@@ -13,8 +13,8 @@ from processed_event import ProcessedEvent
 # Configuration
 AWS_ENDPOINT_URL = os.environ.get("AWS_ENDPOINT_URL", "http://localstack123:4566")
 
-BATCH_SIZE = int(os.environ.get("BATCH_SIZE", 100))
-VISIBILITY_TIMEOUT = int(os.environ.get("VISIBILITY_TIMEOUT", 300))
+BATCH_SIZE = int(os.environ.get("BATCH_SIZE", 5))
+VISIBILITY_TIMEOUT = int(os.environ.get("VISIBILITY_TIMEOUT", 15))
 
 STREAM_NAME = "events"
 
