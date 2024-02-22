@@ -197,7 +197,7 @@ Record Data : {"event_id": "cbd227e2-00dc-437d-93aa-b10e87d4f46f", "event_type":
 
 - How does your application scale and guarantee near-realtime processing when the incoming traffic increases? Where are the possible bottlenecks and how to tackle those?
 
-  - ANSWER -> There are multiple ways to enhance scalability to the application. The obvious way is to horizontally scale the number of preprocessor service which consumes the SQS messages. We could also add the number of shards in kinesis data streams. However, it requires prior observation of flow of data and could be unreliable on fluctuating data stream. If near-realtime processing can be considered, Kinesis Firehose provides the alternative which is a fully managed service that allows you to reliably load streaming data into different services.
+  - ANSWER -> There are multiple opportunities to enhance scalability to the application. The first way could be configure higher BatchSize or max number of messages received from SQS in one request. The other obvious way is to horizontally scale the number of preprocessor service which consumes the SQS messages. We could also add the number of shards in kinesis data streams. However, it requires prior observation of flow of data and could be unreliable on fluctuating data stream. If near-realtime processing can be considered, Kinesis Firehose provides the alternative which is a fully managed service that allows you to reliably load streaming data into different services.
     The main bottleneck is the preprocessor service. If the preprocessor service cannot process the data in the same rate as it is produced by SQS, and cannot publish to kinesis stream, the queue depth can increase a lot, resulting in throttling, high latency and possible dataloss when message exceeds the retention period.
     To tackle this, it is needed to check the various metrics such as health of the preprocessing services and monitor the cloudwatch metrics such as queue depth, and the CPU utilization of the preprocessor service and possibly scale the preprocessing service to increase consumption throughput. And in kinesis, we can reshard to higher shards.
 
@@ -208,6 +208,18 @@ Record Data : {"event_id": "cbd227e2-00dc-437d-93aa-b10e87d4f46f", "event_type":
 - How would you deploy your application in a real world scenario? What kind of testing, deployment stages or quality gates you would build to ensure a safe production deployment?
   - ANSWER -> First of all, in the real world scenario CICD pipeling needs to be built for deployment purposes to automate the delivery process. For build pipeline, following steps in the order should be present - Code Push, Build, Unit tests, Static code analysis, integration tests, automated tests, deployment verification. Various deployment environments like development, testing and production environments needs to be maintained. Build can only be pushed to production after all quality gates passes. Quality gates may include criteria related to test coverage, code quality, performance, security, and compliance. To ensure safe production deployment, dployment model such as BlueGreen deployment should be adopted when deploying new version of the application. Abundantly test the new environment, and only then switch the traffic to the new environment. With this, it provides with the rollback capability to the old environment if the new environment incurs some problem.
     On the other hand, in a real world scenario, the AWS service will be used instead of the test localstack simulator. Also, the AWS CloudFormation can be leveraged for templating as Infrastructure as a code solution to bring up the required services.
+
+### Improvement Areas
+This solution do not use any more AWS services than those configured to be used in locastack image. However, there are opportunities to improve this solution by leveraging other AWS services.
+1. AWS Lambda could be leveraged to poll the SQS queue messages.
+2. Instead of dropping invalid submissions, other special SQS queue called Deadletter queue could have been employed to collect the invalid messages. This preserves data loss and enables visibility to analyze the nature of erroneous message.
+3. Use cloudwatch eventbridge - add a rule to observe if the preprocessor service terminated, it could atleast be used to trigger a SNS alarm to notify the process is not healthy. Better still, another trigger could be to trigger a lambda function that attempts to restart the preprocessor service.
+4. The images could be pushed to the AWS ECR registry.
+
+Other improvement ideas could be:
+1. Better standardized logging
+2. Use a library for validation
+3. 
 
 ### Deliverable Disclaimers
 
