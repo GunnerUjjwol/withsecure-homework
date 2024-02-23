@@ -3,6 +3,7 @@ import base64
 import json
 import time
 import random
+from typing import Any,List
 from botocore.config import Config
 from botocore.exceptions import EndpointConnectionError, ClientError
 
@@ -17,7 +18,7 @@ kinesis_client = boto3.client(
 )
 
 
-def get_records(stream_name: str, shard_iterator: str):
+def get_records(stream_name: str, shard_iterator: str) -> List[Any]:
     """
     Get records from a Kinesis data stream.
 
@@ -34,7 +35,8 @@ def get_records(stream_name: str, shard_iterator: str):
         records = response.get("Records", [])
         return records
     except (EndpointConnectionError, ClientError) as e:
-        pass
+        print(f"Error Encountered while trying to get records from kinesis: {e}")
+        return []
 
 
 def main():

@@ -8,7 +8,9 @@ from botocore.exceptions import EndpointConnectionError, ClientError
 from botocore.config import Config
 import time
 from datetime import datetime
-from processed_event import ProcessedEvent
+from typing import List, Any
+from processed_event import ProcessedEvent, EventType
+
 
 # Configuration
 AWS_ENDPOINT_URL = os.environ.get("AWS_ENDPOINT_URL", "http://localstack:4566")
@@ -17,20 +19,41 @@ BATCH_SIZE = int(os.environ.get("BATCH_SIZE", 5))
 VISIBILITY_TIMEOUT = int(os.environ.get("VISIBILITY_TIMEOUT", 15))
 
 STREAM_NAME = "events"
+QUEUE_NAME = "submissions"
 
-NEW_PROCESS_EVENT = "new_process"
-NETWORK_CONNECTION_EVENT = "network_connection"
-
-EVENT_TYPES = {NEW_PROCESS_EVENT, NETWORK_CONNECTION_EVENT}
+EVENT_TYPES = {
+    EventType.NEW_PROCESS_EVENT.value,
+    EventType.NETWORK_CONNECTION_EVENT.value,
+}
 
 config = Config(
     region_name="eu-west-1", retries={"max_attempts": 3, "mode": "standard"}
 )
 
 
+def get_queue_url(sqs_client, queue_name: str) -> str:
+    """
+    Get Queue URL
+
+    Args:
+        sqs_client : _description_
+
+    Returns:
+        str: the queue url
+    """
+    while True:
+        try:
+            queue_url = sqs_client.get_queue_url(QueueName=queue_name)["QueueUrl"]
+            return queue_url
+        except (EndpointConnectionError, ClientError) as e:
+            print(f"Error encountered while getting queue URL: {e}")
+        # wait before retrying again
+        time.sleep(5)
+
+
 def receive_submissions(
     sqs_client, queue_url: str, batch_size: int, visibility_timeout: int
-):
+) -> List[Any]:
     """
     Receive messages from SQS
 
@@ -52,10 +75,12 @@ def receive_submissions(
         messages = response.get("Messages", [])
         return messages
     except (EndpointConnectionError, ClientError) as e:
-        pass
+        print(f"Error Encountered while polling submissions from queue: {e}")
+        return []
 
 
-def validate_submission(submission_data: dict):
+# TODO: COnsider using a validation library
+def validate_submission(submission_data: dict) -> bool:
     """
     Validates the submission data.
 
@@ -112,7 +137,7 @@ def validate_submission(submission_data: dict):
     return True
 
 
-def is_valid_uuid(uuid_str: str):
+def is_valid_uuid(uuid_str: str) -> bool:
     """
     Validation function for uuid
 
@@ -129,7 +154,7 @@ def is_valid_uuid(uuid_str: str):
     return str(uuid_obj) == uuid_str
 
 
-def preprocess_submission(submission: dict):
+def preprocess_submission(submission: dict) -> List[ProcessedEvent]:
     """
     Preprocesses a submission and
     extracts individual events for publishing to Kinesis.
@@ -155,11 +180,12 @@ def preprocess_submission(submission: dict):
     return processed_events
 
 
-def publish_to_kinesis(kinesis_client, events: dict):
+def publish_to_kinesis(kinesis_client, events: dict) -> None:
     """
     Publish individual event to kinesis data stream
 
     Args:
+        kinesis_client : the Kinesis client
         events         : Events
     """
     try:
@@ -171,10 +197,11 @@ def publish_to_kinesis(kinesis_client, events: dict):
             )
 
     except (EndpointConnectionError, ClientError) as e:
-        pass
+        print(f"Error Encountered while publishing events to kinesis: {e}")
+        return
 
 
-def delete_from_queue(sqs_client, queue_url: str, receipt_handle):
+def delete_from_queue(sqs_client, queue_url: str, receipt_handle) -> None:
     """
     Delete message from Queue
 
@@ -186,7 +213,8 @@ def delete_from_queue(sqs_client, queue_url: str, receipt_handle):
     try:
         sqs_client.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
     except (EndpointConnectionError, ClientError) as e:
-        pass
+        print(f"Error Encountered while deleting message from queue: {e}")
+        return
 
 
 def main():
@@ -203,9 +231,14 @@ def main():
         "kinesis", config=config, endpoint_url=AWS_ENDPOINT_URL, verify=False
     )
 
+    queue_url = get_queue_url(sqs_client, queue_name=QUEUE_NAME)
+
+    if not queue_url:
+        print("Cannot get queue_url")
+        return
+
     while True:
         try:
-            queue_url = sqs_client.get_queue_url(QueueName="submissions")["QueueUrl"]
             # Receive messages from SQS
             messages = receive_submissions(
                 sqs_client, queue_url, BATCH_SIZE, VISIBILITY_TIMEOUT
@@ -248,9 +281,12 @@ def main():
                 # Delete the message from SQS
                 delete_from_queue(sqs_client, queue_url, receipt_handle)
 
+                # The sleep time is added to simulate a bit of a processing time in this test environment
+                # Otherwise it is rather too fast and can be difficult to watch the logs
                 time.sleep(random.randint(5, 15))
         except (EndpointConnectionError, ClientError) as e:
-            pass
+            print(f"Error Encountered: {e}")
+            return
 
 
 if __name__ == "__main__":

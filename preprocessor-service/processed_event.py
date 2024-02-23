@@ -2,15 +2,20 @@ import uuid
 import json
 from datetime import datetime
 
+from enum import Enum
 
-class ProcessedEvent:
-
+class EventType(Enum):
+    """
+    Enum representing event types.
+    """
     NEW_PROCESS_EVENT = "new_process"
     NETWORK_CONNECTION_EVENT = "network_connection"
+
+
+class ProcessedEvent:
     """
     Class representing a processed event.
     """
-
     def __init__(
         self, event_type: str, submission_id: str, device_id: str, event_data: dict
     ):
@@ -22,11 +27,19 @@ class ProcessedEvent:
         self.event_data = event_data
 
     def toJson(self):
+       # Util to convert clas object to Json        
         return json.dumps(self, default=lambda o: o.__dict__)
 
-    def validate_event(self):
+    # TODO: Use a validator library
+    def validate_event(self) -> bool:
+        """
+        Validate individual event
+
+        Returns:
+            bool: true if valid, false otherwise
+        """
         # Checks for event_type : new_process
-        if self.event_type == self.NEW_PROCESS_EVENT:
+        if self.event_type == EventType.NEW_PROCESS_EVENT.value:
             if not all(key in self.event_data for key in ["cmdl", "user"]):
                 print(
                     f"Detected invalid event key apart from 'cmdl' and 'user'. Dropping event :{self.event_data}"
@@ -40,7 +53,7 @@ class ProcessedEvent:
                 )
                 return False
         # Checks for event_type : network_connection
-        elif self.event_type == self.NETWORK_CONNECTION_EVENT:
+        elif self.event_type == EventType.NETWORK_CONNECTION_EVENT.value:
             if not all(
                 key in self.event_data
                 for key in ["source_ip", "destination_ip", "destination_port"]
