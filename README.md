@@ -62,7 +62,27 @@ The entire environment can be brought up with `docker-compose up -d`. This will 
 
 The preprocessor-service alone can be launched with `docker-compose up -d preprocessor-service` if other containers are already running. The image for the service can be rebuilt if needed with `docker-compose build preprocessor-service`.
 
-To validate that the preprocessor-service have been started up properly, run the following commands to ensure event data are published to the kinesis datastream, expect similar responses as in the examples below:
+To validate that the preprocessor-service have been started up properly, A kinesis consumer simulator utility has been built with python sdk and has been placed in the localstack container as `kinesis_consumer.py`for this purpose to simultate as the consumer of kinesis records.
+
+Run the following commands to ensure event data are published to the kinesis datastream, expect similar responses as in the examples below:
+
+Exec into the running container as `docker exec localstack bash`
+then run `python kinesis_consumer.py`
+
+```console
+$ docker exec -it localstack bash
+
+$ python kinesis_consumer.py
+Consumer Started
+--------------------
+Record Data : {"event_id": "3e6e2c72-3bd0-49aa-bb67-739f92afcb6b", "event_type": "network_connection", "submission_id": "8af031bb-f03c-4cb3-b245-dda2378e263e", "device_id": "e051049e-9ef5-4c5b-aa34-cf74b48925f5", "time_processed": "2024-02-21T13:40:10.073492", "event_data": {"source_ip": "192.168.0.1", "destination_ip": "23.13.252.39", "destination_port": 58404}}
+---------------------
+Record Data : {"event_id": "cbd227e2-00dc-437d-93aa-b10e87d4f46f", "event_type": "network_connection", "submission_id": "9dfaec9c-2375-4a5e-bc21-09efa232a876", "device_id": "0c6ad527-418f-4cfd-8d44-cd252cbc0c49", "time_processed": "2024-02-21T13:40:24.172857", "event_data": {"source_ip": "192.168.0.2", "destination_ip": "23.13.252.39", "destination_port": 39321}}
+```
+
+Alternative Way
+
+Run the following commands to ensure event data are published to the kinesis datastream, expect similar responses as in the examples below:
 
 1. Describe the stream. Note the shardId to be used in next command.
 
@@ -157,23 +177,6 @@ $ docker-compose exec localstack aws --endpoint-url=http://localhost:4566 kinesi
 $ docker-compose exec localstack aws --endpoint-url=http://localhost:4566 kinesis get-records --shard-iterator <shardIterator>
 ```
 
-Alternative Way
-
-A kinesis consumer simulator built with python sdk `kinesis_consumer.py` has been placed in the localstack container.
-Exec into the running container as `docker exec localstack bash`
-then run `python kinesis_consumer.py`
-
-```console
-$ docker exec localstack bash
-
-$ python kinesis_consumer.py
-Consumer Started
---------------------
-Record Data : {"event_id": "3e6e2c72-3bd0-49aa-bb67-739f92afcb6b", "event_type": "network_connection", "submission_id": "8af031bb-f03c-4cb3-b245-dda2378e263e", "device_id": "e051049e-9ef5-4c5b-aa34-cf74b48925f5", "time_processed": "2024-02-21T13:40:10.073492", "event_data": {"source_ip": "192.168.0.1", "destination_ip": "23.13.252.39", "destination_port": 58404}}
----------------------
-Record Data : {"event_id": "cbd227e2-00dc-437d-93aa-b10e87d4f46f", "event_type": "network_connection", "submission_id": "9dfaec9c-2375-4a5e-bc21-09efa232a876", "device_id": "0c6ad527-418f-4cfd-8d44-cd252cbc0c49", "time_processed": "2024-02-21T13:40:24.172857", "event_data": {"source_ip": "192.168.0.2", "destination_ip": "23.13.252.39", "destination_port": 39321}}
-```
-
 ### Explanations towards requirements Fulfillment
 
 - each event is published as an individual record to kinesis (one submission is turned into multiple events)
@@ -211,15 +214,14 @@ Record Data : {"event_id": "cbd227e2-00dc-437d-93aa-b10e87d4f46f", "event_type":
 
 ### Improvement Areas
 This solution do not use any more AWS services than those configured to be used in locastack image. However, there are opportunities to improve this solution by leveraging other AWS services.
-1. AWS Lambda could be leveraged to poll the SQS queue messages.
+1. AWS Lambda could be leveraged to poll the SQS queue messages. The event-driven architecture and automatic scalability with AWS lambda based on the queuedepth could enhance the architecture. 
 2. Instead of dropping invalid submissions, other special SQS queue called Deadletter queue could have been employed to collect the invalid messages. This preserves data loss and enables visibility to analyze the nature of erroneous message.
 3. Use cloudwatch eventbridge - add a rule to observe if the preprocessor service terminated, it could atleast be used to trigger a SNS alarm to notify the process is not healthy. Better still, another trigger could be to trigger a lambda function that attempts to restart the preprocessor service.
 4. The images could be pushed to the AWS ECR registry.
 
 Other improvement ideas could be:
-1. Better standardized logging
+1. Better standardized logging and Exception logging
 2. Use a library for validation
-3. 
 
 ### Deliverable Disclaimers
 
